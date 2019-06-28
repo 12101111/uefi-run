@@ -1,9 +1,3 @@
-extern crate clap;
-extern crate ctrlc;
-extern crate fatfs;
-extern crate tempfile;
-extern crate wait_timeout;
-
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Child, Command};
@@ -27,14 +21,14 @@ fn main() {
         .arg(clap::Arg::with_name("bios_path")
              .value_name("bios_path")
              .required(false)
-             .help("BIOS image (default = /usr/share/ovmf/OVMF.fd)")
+             .help("BIOS image (default = ./OVMF.fd)")
              .short("b")
              .long("bios")
         )
         .arg(clap::Arg::with_name("qemu_path")
              .value_name("qemu_path")
              .required(false)
-             .help("Path to qemu executable (default = /usr/bin/qemu-system-x86_64")
+             .help("Path to qemu executable (default = qemu-system-x86_64")
              .short("q")
              .long("qemu")
         )
@@ -55,8 +49,8 @@ fn main() {
 
     // Parse options
     let efi_exe = matches.value_of("efi_exe").unwrap();
-    let bios_path = matches.value_of("bios_path").unwrap_or("/usr/share/ovmf/OVMF.fd");
-    let qemu_path = matches.value_of("qemu_path").unwrap_or("/usr/bin/qemu-system-x86_64");
+    let bios_path = matches.value_of("bios_path").unwrap_or("OVMF.fd");
+    let qemu_path = matches.value_of("qemu_path").unwrap_or("qemu-system-x86_64");
     let size: u64 = matches.value_of("size").map(|v| v.parse().expect("Failed to parse --size argument")).unwrap_or(10);
     let user_qemu_args = matches.values_of("qemu_args").unwrap_or(clap::Values::default());
 
