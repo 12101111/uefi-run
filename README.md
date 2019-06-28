@@ -5,13 +5,37 @@
 [Latest Version]: https://img.shields.io/crates/v/uefi-run.svg
 [crates.io]: https://crates.io/crates/uefi-run
 
-**Directly run UEFI applications in qemu**
+Run UEFI applications in qemu
 
----
+## Installation
 
-This helper application takes an EFI executable, builds a FAT filesystem around
-it, adds a startup script and runs qemu to run the executable.
+```shell
+cargo install uefi-run
+```
 
-It does not require root permissions since it uses the [fatfs](https://crates.io/crates/fatfs)
-crate to build the filesystem image directly without involving `mkfs`, `mount`,
-etc.
+## Usage
+
+### Run directly
+
+```shell
+# run UEFI application directly
+uefi-run [UEFI_FILE]
+# run UEFI application in headless qemu
+uefi-run [UEFI_FILE] -- -nographic
+```
+
+### Using in rust project
+
+First you should install `cargo-xbuild`.
+
+You can set `uefi-run` as a custom runner in `.cargo/config`:
+
+```toml
+[build]
+target = "x86_64-unknown-uefi"
+
+[target.x86_64-unknown-uefi]
+runner = "uefi-run"
+```
+
+Then you can run your rust UEFI application through `cargo xrun`.
