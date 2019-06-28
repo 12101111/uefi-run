@@ -1,5 +1,3 @@
-use std::io::Write;
-use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -36,14 +34,6 @@ fn main() {
                 .long("qemu"),
         )
         .arg(
-            clap::Arg::with_name("size")
-                .value_name("size")
-                .required(false)
-                .help("Size of the image in MiB (default = 10)")
-                .short("s")
-                .long("size"),
-        )
-        .arg(
             clap::Arg::with_name("qemu_args")
                 .value_name("qemu_args")
                 .required(false)
@@ -58,10 +48,6 @@ fn main() {
     let qemu_path = matches
         .value_of("qemu_path")
         .unwrap_or("qemu-system-x86_64");
-    let size: u64 = matches
-        .value_of("size")
-        .map(|v| v.parse().expect("Failed to parse --size argument"))
-        .unwrap_or(10);
     let user_qemu_args = matches
         .values_of("qemu_args")
         .unwrap_or(clap::Values::default());
@@ -80,63 +66,35 @@ fn main() {
         .expect("Error setting termination handler");
     }
 
-    // Create temporary dir for the image file.
+    // Create temporary dir for ESP.
     let temp_dir = tempfile::tempdir().expect("Unable to create temporary directory");
-    let temp_dir_path = PathBuf::from(temp_dir.path());
+    // Path to /EFI/BOOT
+    let efi_boot_path = temp_dir.path().join("EFI").join("BOOT");
+    std::fs::create_dir_all(efi_boot_path.clone()).expect("Unable to create /EFI/BOOT directory");
+    let bootx64_path = efi_boot_path.join("BOOTX64.EFI");
+    std::fs::copy(efi_exe, bootx64_path).expect("Unable to copy EFI executable");
 
-    // Path to the image file
-    let image_file_path = {
-        let mut path_buf = temp_dir_path.clone();
-        path_buf.push("image.fat");
-        path_buf
-    };
-
-    {
-        // Create image file
-        let image_file = std::fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create_new(true)
-            .open(&image_file_path)
-            .expect("Image file creation failed");
-        // Truncate image to `size` MiB
-        image_file
-            .set_len(size * 0x10_0000)
-            .expect("Truncating image file failed");
-        // Format file as FAT
-        fatfs::format_volume(&image_file, fatfs::FormatVolumeOptions::new())
-            .expect("Formatting image file failed");
-
-        // Open the FAT fs.
-        let fs = fatfs::FileSystem::new(&image_file, fatfs::FsOptions::new())
-            .expect("Failed to open filesystem");
-
-        // Create run.efi
-        let efi_exe_contents = std::fs::read(efi_exe).unwrap();
-        let mut run_efi = fs.root_dir().create_file("run.efi").unwrap();
-        run_efi.truncate().unwrap();
-        run_efi.write_all(&efi_exe_contents).unwrap();
-
-        // Create startup.nsh
-        let mut startup_nsh = fs.root_dir().create_file("startup.nsh").unwrap();
-        startup_nsh.truncate().unwrap();
-        startup_nsh
-            .write_all(include_bytes!("startup.nsh"))
-            .unwrap();
-    }
-
-    let mut qemu_args = vec![
-        "-drive".into(),
-        format!(
-            "file={},index=0,media=disk,format=raw",
-            image_file_path.display()
-        ),
-        "-bios".into(),
-        format!("{}", bios_path),
-        "-net".into(),
-        "none".into(),
+    let mut qemu_args_ref = vec![
+        // Disable default devices.
+        // QEMU by defaults enables a ton of devices which slow down boot.
+        "-nodefaults",
+        // Use a modern machine, with acceleration if possible.
+        "-machine","q35,accel=kvm:tcg",
+        // A standard VGA card with Bochs VBE extensions.
+        "-vga","std",
+        // Connect the serial port to the host. OVMF is kind enough to connect
+        // the UEFI stdout and stdin to that port too.
+        "-serial","stdio",
+        // Map the QEMU exit signal to port f4
+        "-device","isa-debug-exit,iobase=0xf4,iosize=0x04",
+        // Set up OVMF.
+        "-bios",bios_path,
+        // Mount a local directory as a FAT partition.
+        "-drive",
     ];
-    qemu_args.extend(user_qemu_args.map(|x| x.into()));
+    qemu_args_ref.extend(user_qemu_args);
+    let mut qemu_args:Vec<_> = qemu_args_ref.into_iter().map(|x| x.into()).collect();
+    qemu_args.push(format!("format=raw,file=fat:rw:{}", temp_dir.path().display()));
 
     // Run qemu.
     let mut child = Command::new(qemu_path)
