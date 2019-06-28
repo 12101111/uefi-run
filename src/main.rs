@@ -29,7 +29,7 @@ fn main() {
             clap::Arg::with_name("qemu_path")
                 .value_name("qemu_path")
                 .required(false)
-                .help("Path to qemu executable (default = qemu-system-x86_64")
+                .help("Path to qemu executable (default = qemu-system-x86_64)")
                 .short("q")
                 .long("qemu"),
         )
@@ -74,7 +74,7 @@ fn main() {
     let bootx64_path = efi_boot_path.join("BOOTX64.EFI");
     std::fs::copy(efi_exe, bootx64_path).expect("Unable to copy EFI executable");
 
-    let mut qemu_args_ref = vec![
+    let qemu_args_ref = vec![
         // Disable default devices.
         // QEMU by defaults enables a ton of devices which slow down boot.
         "-nodefaults",
@@ -85,16 +85,14 @@ fn main() {
         // Connect the serial port to the host. OVMF is kind enough to connect
         // the UEFI stdout and stdin to that port too.
         "-serial","stdio",
-        // Map the QEMU exit signal to port f4
-        "-device","isa-debug-exit,iobase=0xf4,iosize=0x04",
         // Set up OVMF.
         "-bios",bios_path,
         // Mount a local directory as a FAT partition.
         "-drive",
     ];
-    qemu_args_ref.extend(user_qemu_args);
     let mut qemu_args:Vec<_> = qemu_args_ref.into_iter().map(|x| x.into()).collect();
     qemu_args.push(format!("format=raw,file=fat:rw:{}", temp_dir.path().display()));
+    qemu_args.extend(user_qemu_args.map(|x| x.into()));
 
     // Run qemu.
     let mut child = Command::new(qemu_path)
