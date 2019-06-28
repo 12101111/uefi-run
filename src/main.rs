@@ -59,7 +59,6 @@ fn main() {
             exit(1);
         }
     });
-    dbg!(bios_path);
     let qemu_path = matches
         .value_of("qemu_path")
         .unwrap_or("qemu-system-x86_64");
