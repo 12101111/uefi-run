@@ -1,4 +1,5 @@
-use std::process::{Child, Command};
+use std::path::Path;
+use std::process::{Child, Command, exit};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -21,7 +22,7 @@ fn main() {
             clap::Arg::with_name("bios_path")
                 .value_name("bios_path")
                 .required(false)
-                .help("BIOS image (default = ./OVMF.fd)")
+                .help("BIOS image (default = /usr/share/OVMF/{OVMF.fd, x64/OVMF_CODE.fd} or ./OVMF.fd)")
                 .short("b")
                 .long("bios"),
         )
@@ -44,7 +45,21 @@ fn main() {
 
     // Parse options
     let efi_exe = matches.value_of("efi_exe").unwrap();
-    let bios_path = matches.value_of("bios_path").unwrap_or("OVMF.fd");
+    let bios_path = matches.value_of("bios_path").unwrap_or_else(|| {
+        // Debian Ubuntu
+        if Path::new("/usr/share/OVMF/OVMF.fd").exists() {
+            "/usr/share/OVMF/OVMF.fd"
+        // Archlinux
+        } else if Path::new("/usr/share/ovmf/x64/OVMF_CODE.fd").exists() {
+            "/usr/share/ovmf/x64/OVMF_CODE.fd"
+        } else if Path::new("OVMF.fd").exists() {
+            "OVMF.fd"
+        } else {
+            eprintln!("Unable to find OVMF.fd");
+            exit(1);
+        }
+    });
+    dbg!(bios_path);
     let qemu_path = matches
         .value_of("qemu_path")
         .unwrap_or("qemu-system-x86_64");
